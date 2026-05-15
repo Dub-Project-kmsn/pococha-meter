@@ -23,8 +23,17 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Run scraper
+      - name: Install tesseract OCR
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-jpn
+
+      - name: Run scraper (daily HTML)
         run: python3 scraper.py
+
+      - name: Run OCR backfill (chart images)
+        run: python3 ocr_backfill.py
+        continue-on-error: true
 
       - name: Commit changes
         run: |

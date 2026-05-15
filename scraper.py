@@ -93,6 +93,25 @@ def parse_article(html):
     return result
 
 
+def extract_article_day(html, expected_month):
+    """記事に書かれている日付 (N日) を抽出。複数あれば最大値（最新日）を返す。
+    expected_month は記事タイトルの月（記事の本文「N月M日」のNと一致するはず）。"""
+    # 「M月D日」の形式を優先（本文の見出し）
+    days = []
+    for m in re.finditer(r'(\d{1,2})月(\d{1,2})日', html):
+        mo, d = int(m.group(1)), int(m.group(2))
+        if mo == expected_month and 1 <= d <= 31:
+            days.append(d)
+    if days:
+        return max(days)
+    # フォールバック: <h3>N日</h3> のような形
+    for m in re.finditer(r'<h3[^>]*>[^<]*?(\d{1,2})日', html):
+        d = int(m.group(1))
+        if 1 <= d <= 31:
+            days.append(d)
+    return max(days) if days else None
+
+
 def load_existing(path):
     if path.exists():
         with path.open(encoding='utf-8') as f:
@@ -133,13 +152,15 @@ def main():
     now = datetime.now(JST)
     current_ym = (now.year, now.month)
 
-    added = updated = 0
+    added = updated = daily_added = 0
     for year, month, t, url in unique:
         month_key = f"{year}-{month:02d}"
         is_current_month = (year, month) == current_ym
         already_have = month_key in data and t in data[month_key]
 
-        if already_have and not is_current_month:
+        # 当月は毎日 _d[day] に追記したいので、過去月でも _d が無い記事はフェッチする
+        need_fetch = is_current_month or (not already_have)
+        if not need_fetch:
             continue
 
         try:
@@ -153,7 +174,23 @@ def main():
             print(f"[warn] only {len(ranks)} ranks parsed from {url} (expected 18) — skip", file=sys.stderr)
             continue
 
-        data.setdefault(month_key, {})[t] = ranks
+        # 既存のキー（ランク値・_d など）を保持しつつマージ
+        time_bucket = data.setdefault(month_key, {}).setdefault(t, {})
+        # ランクごとの値を更新（最新日 = 月末候補値として上書き）
+        for r, v in ranks.items():
+            time_bucket[r] = v
+
+        # 記事が「何日のデータ」かを抽出して日別データを保存
+        day = extract_article_day(html, month)
+        if day is not None:
+            d_bucket = time_bucket.setdefault('_d', {})
+            day_str = str(day)
+            is_new_day = day_str not in d_bucket
+            d_bucket[day_str] = ranks
+            if is_new_day:
+                daily_added += 1
+                print(f"[daily]  {month_key} {t}h day={day} ({len(ranks)} ranks)")
+
         if already_have:
             updated += 1
             print(f"[update] {month_key} {t}h ({len(ranks)} ranks)")
@@ -169,7 +206,7 @@ def main():
     with data_path.open('w', encoding='utf-8') as f:
         json.dump(existing, f, ensure_ascii=False, indent=2)
 
-    print(f"[done] added={added} updated={updated} total_months={len(data)}")
+    print(f"[done] added={added} updated={updated} daily_added={daily_added} total_months={len(data)}")
     return 0
 
 

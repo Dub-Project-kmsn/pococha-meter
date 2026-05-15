@@ -318,7 +318,11 @@
   </div>
 
   <div class="prediction-section">
-    <div class="section-title">📊 今月の予想ボーダー（直近3ヶ月の月末平均）</div>
+    <div class="section-title" id="predTitle">📊 今月の予想ボーダー</div>
+    <div class="time-tabs" style="margin-bottom:12px;">
+      <div class="time-tab active" id="algo-daily" onclick="setAlgo('daily')">月内日次平均</div>
+      <div class="time-tab" id="algo-monthend" onclick="setAlgo('monthend')">月末値</div>
+    </div>
     <div class="border-cards">
       <div class="border-card pm0">
         <div class="border-label">±0</div>
@@ -339,8 +343,28 @@
         <div class="border-range" id="range-p2"></div>
       </div>
     </div>
-    <div class="algo-note">
-      <strong>予想方法：</strong>直近3ヶ月の月末平均値を予想値、直近6ヶ月のMin〜Maxを範囲として表示しています。
+    <div class="algo-note" id="algoNote">
+      <strong>月内日次平均：</strong>各月の日次データの平均（月末2日を除外）を直近3ヶ月で平均。月末はオフ日や応援チケット使用で値が低めになる傾向があるため除外しています。
+    </div>
+  </div>
+
+  <div class="prediction-section" id="dailySection" style="display:none;">
+    <div class="section-title">📅 今月の日別ボーダー実績</div>
+    <div class="history-card">
+      <div class="history-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>日</th>
+              <th>曜</th>
+              <th class="num" style="color:#16a34a">±0</th>
+              <th class="num" style="color:#2563eb">+1</th>
+              <th class="num" style="color:#d97706">+2</th>
+            </tr>
+          </thead>
+          <tbody id="dailyBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -397,6 +421,8 @@ const DOW_LABEL = ['日','月','火','水','木','金','土'];
 
 let currentTime = '24';
 let currentRank = 'C1';
+let currentAlgo = 'daily';  // 'daily' = 月内日次平均, 'monthend' = 月末値
+const MONTH_END_EXCLUDE_DAYS = 2;  // 月末N日は平均から除外
 
 function fmt(n) {
   if (n == null) return '—';
@@ -417,15 +443,47 @@ function getValues(rank, time, monthKey) {
   return t[rank] || null;
 }
 
+function getDailyMap(time, monthKey) {
+  // returns { "1": {rank: [...]}, "14": {...} } or null
+  const m = RAW[monthKey];
+  if (!m) return null;
+  const t = m[time];
+  if (!t || !t._d) return null;
+  return t._d;
+}
+
 function lastDayOfMonth(year, month1to12) {
   return new Date(year, month1to12, 0).getDate();
+}
+
+// 月の代表値: 月内日次平均（月末MONTH_END_EXCLUDE_DAYS日を除外）
+// 日次が無い場合は月末値にフォールバック
+function monthRepresentative(rank, time, monthKey) {
+  if (currentAlgo === 'monthend') return getValues(rank, time, monthKey);
+  const daily = getDailyMap(time, monthKey);
+  if (!daily) return getValues(rank, time, monthKey);
+  const [yStr, moStr] = monthKey.split('-');
+  const lastDay = lastDayOfMonth(parseInt(yStr), parseInt(moStr));
+  const cutoff = lastDay - MONTH_END_EXCLUDE_DAYS;  // この日以下の日を採用
+  const samples = [];
+  for (const [dStr, ranks] of Object.entries(daily)) {
+    const d = parseInt(dStr);
+    if (d > cutoff) continue;
+    if (!ranks[rank]) continue;
+    samples.push(ranks[rank]);
+  }
+  if (samples.length < 3) {
+    // サンプル不足は月末値を返す
+    return getValues(rank, time, monthKey);
+  }
+  return [0,1,2].map(i => Math.round(samples.reduce((s, v) => s + v[i], 0) / samples.length));
 }
 
 function computePrediction(rank, time) {
   const recentMonths = MONTHS_SORTED.slice(-3);
   const rangeMonths  = MONTHS_SORTED.slice(-6);
-  const vals3 = recentMonths.map(m => getValues(rank, time, m)).filter(Boolean);
-  const vals6 = rangeMonths.map(m => getValues(rank, time, m)).filter(Boolean);
+  const vals3 = recentMonths.map(m => monthRepresentative(rank, time, m)).filter(Boolean);
+  const vals6 = rangeMonths.map(m => monthRepresentative(rank, time, m)).filter(Boolean);
   if (!vals3.length) return null;
   const pred = [0,1,2].map(i => avg(vals3.map(v => v[i])));
   const minV = [0,1,2].map(i => Math.min(...vals6.map(v => v[i]).filter(x => x != null)));
@@ -505,11 +563,57 @@ function renderHistory() {
 
 function setTime(t) {
   currentTime = t;
-  document.querySelectorAll('.time-tab').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.time-tab').forEach(el => {
+  document.querySelectorAll('.filter-card .time-tab').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.filter-card .time-tab').forEach(el => {
     if (el.textContent.includes(t)) el.classList.add('active');
   });
   render();
+}
+
+function setAlgo(a) {
+  currentAlgo = a;
+  document.getElementById('algo-daily').classList.toggle('active', a === 'daily');
+  document.getElementById('algo-monthend').classList.toggle('active', a === 'monthend');
+  const note = document.getElementById('algoNote');
+  if (a === 'daily') {
+    note.innerHTML = '<strong>月内日次平均：</strong>各月の日次データの平均（月末' + MONTH_END_EXCLUDE_DAYS + '日を除外）を直近3ヶ月で平均。月末はオフ日や応援チケット使用で値が低めになる傾向があるため除外しています。';
+  } else {
+    note.innerHTML = '<strong>月末値：</strong>各月の月末ボーダー値を直近3ヶ月で平均。月末はオフ日が多く実際の傾向より低めの可能性があります。';
+  }
+  render();
+}
+
+function renderDailyTable() {
+  const sec = document.getElementById('dailySection');
+  const tbody = document.getElementById('dailyBody');
+  tbody.innerHTML = '';
+  const now = new Date();
+  const currentKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const daily = getDailyMap(currentTime, currentKey);
+  if (!daily || !Object.keys(daily).length) {
+    sec.style.display = 'none';
+    return;
+  }
+  const days = Object.keys(daily).map(d => parseInt(d)).sort((a, b) => a - b);
+  let hasAny = false;
+  for (const d of days) {
+    const ranks = daily[String(d)];
+    if (!ranks[currentRank]) continue;
+    hasAny = true;
+    const dt = new Date(now.getFullYear(), now.getMonth(), d);
+    const dow = DOW_LABEL[dt.getDay()];
+    const v = ranks[currentRank];
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="month">${d}日</td>
+      <td class="month">${dow}</td>
+      <td class="num pm0-val">${fmt(v[0])}</td>
+      <td class="num p1-val">${fmt(v[1])}</td>
+      <td class="num p2-val">${fmt(v[2])}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+  sec.style.display = hasAny ? 'block' : 'none';
 }
 
 function setRank(r) {
@@ -524,6 +628,7 @@ function render() {
   renderPrediction();
   renderReferences();
   renderHistory();
+  renderDailyTable();
 }
 
 function init() {
