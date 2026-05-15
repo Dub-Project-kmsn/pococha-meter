@@ -17,6 +17,7 @@ import urllib.error
 import re
 import json
 import sys
+import os
 import time
 import subprocess
 import tempfile
@@ -24,6 +25,9 @@ import shutil
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from io import BytesIO
+
+DEBUG = os.environ.get('OCR_DEBUG') == '1'
+LIMIT = int(os.environ.get('OCR_LIMIT') or 0)  # 0=無制限
 
 USER_AGENT = "Mozilla/5.0 (compatible; PocochaBorderOCR/1.0)"
 CATEGORY_URL = "https://one-carat.com/campus/archives/category/streamer-tips/pococha-rank-border"
@@ -261,6 +265,10 @@ def process_article(year, month, t, url, data):
             total_days += n
         else:
             print(f"[warn]   img{idx} parse yielded 0 days", file=sys.stderr)
+            if DEBUG:
+                print(f"[debug] === OCR raw text for img{idx} ===", file=sys.stderr)
+                print(text, file=sys.stderr)
+                print(f"[debug] === END ===", file=sys.stderr)
         time.sleep(0.5)
 
     return total_days
@@ -295,8 +303,13 @@ def main():
     print(f"[info] {len(unique)} articles to OCR", file=sys.stderr)
 
     total = 0
+    processed = 0
     for year, month, t, url in unique:
+        if LIMIT and processed >= LIMIT:
+            print(f"[info] OCR_LIMIT={LIMIT} reached, stopping", file=sys.stderr)
+            break
         total += process_article(year, month, t, url, data)
+        processed += 1
 
     now = datetime.now(JST)
     existing['data'] = data

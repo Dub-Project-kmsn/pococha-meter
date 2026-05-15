@@ -32,6 +32,9 @@ jobs:
         run: python3 scraper.py
 
       - name: Run OCR backfill (chart images)
+        env:
+          OCR_DEBUG: ${{ vars.OCR_DEBUG }}
+          OCR_LIMIT: ${{ vars.OCR_LIMIT }}
         run: python3 ocr_backfill.py
         continue-on-error: true
 
