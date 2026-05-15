@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ポコチャ メーター予想アプリ</title>
+<style>
+  :root {
+    --primary: #e85d9f;
+    --primary-light: #f5a7cc;
+    --primary-dark: #c23f80;
+    --bg: #fdf2f7;
+    --card: #ffffff;
+    --text: #2d1f28;
+    --sub: #7a5566;
+    --border: #f0d4e3;
+    --pm0: #34c172;
+    --p1: #3b82f6;
+    --p2: #f59e0b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, #e85d9f 0%, #c23f80 50%, #9b2060 100%);
+    color: white;
+    padding: 20px 16px 24px;
+    text-align: center;
+  }
+  header h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  header p { font-size: 13px; opacity: 0.85; }
+
+  .container { max-width: 640px; margin: 0 auto; padding: 16px; }
+
+  .filter-card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 12px rgba(232,93,159,0.08);
+    border: 1px solid var(--border);
+  }
+  .filter-label { font-size: 12px; color: var(--sub); font-weight: 600; margin-bottom: 8px; }
+
+  .time-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .time-tab {
+    flex: 1;
+    padding: 10px 0;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    background: white;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--sub);
+    text-align: center;
+    transition: all 0.15s;
+  }
+  .time-tab.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+  }
+
+  .rank-scroll {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .rank-scroll::-webkit-scrollbar { display: none; }
+  .rank-btn {
+    flex-shrink: 0;
+    padding: 7px 13px;
+    border-radius: 20px;
+    border: 2px solid var(--border);
+    background: white;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--sub);
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .rank-btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+  }
+
+  .prediction-section { margin-bottom: 16px; }
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--sub);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+    padding-left: 4px;
+  }
+
+  .date-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .date-row label { font-size: 12px; color: var(--sub); font-weight: 600; flex-shrink: 0; }
+  .date-input {
+    flex: 1;
+    padding: 8px 10px;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    font-size: 14px;
+    color: var(--text);
+    background: white;
+    font-family: inherit;
+  }
+  .date-info {
+    background: linear-gradient(135deg, #fef3f9, #fff);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: var(--sub);
+    line-height: 1.6;
+  }
+  .date-info b { color: var(--primary-dark); }
+  .factor-tag {
+    display: inline-block;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 7px;
+    font-size: 11px;
+    margin-right: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ref-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .ref-card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .ref-card .ref-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--sub);
+    margin-bottom: 4px;
+  }
+  .ref-card .ref-date {
+    font-size: 10px;
+    color: var(--sub);
+    opacity: 0.7;
+    margin-bottom: 8px;
+  }
+  .ref-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    margin-bottom: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+  .ref-row .ref-key { color: var(--sub); font-weight: 600; }
+  .ref-row .ref-val { font-weight: 700; }
+
+  .border-cards { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .border-card {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 14px 10px;
+    text-align: center;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    border: 2px solid;
+  }
+  .border-card.pm0 { border-color: #b8f0d4; background: linear-gradient(160deg, #f0fff7, #fff); }
+  .border-card.p1  { border-color: #bfdbfe; background: linear-gradient(160deg, #eff6ff, #fff); }
+  .border-card.p2  { border-color: #fde68a; background: linear-gradient(160deg, #fffbeb, #fff); }
+
+  .border-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .pm0 .border-label { color: #16a34a; }
+  .p1  .border-label { color: #2563eb; }
+  .p2  .border-label { color: #d97706; }
+
+  .border-desc {
+    font-size: 10px;
+    margin-bottom: 8px;
+    opacity: 0.65;
+    color: var(--text);
+  }
+
+  .border-value {
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .pm0 .border-value { color: #16a34a; }
+  .p1  .border-value { color: #2563eb; }
+  .p2  .border-value { color: #d97706; }
+
+  .border-range {
+    font-size: 10px;
+    color: var(--sub);
+    opacity: 0.8;
+  }
+
+  .algo-note {
+    background: #fdf2f7;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-top: 12px;
+    font-size: 11.5px;
+    color: var(--sub);
+    line-height: 1.5;
+  }
+  .algo-note strong { color: var(--primary-dark); }
+
+  .history-card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 2px 12px rgba(232,93,159,0.08);
+    border: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  .history-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 300px;
+  }
+  th {
+    padding: 8px 6px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--sub);
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+  }
+  th.num { text-align: right; }
+  td {
+    padding: 9px 6px;
+    border-bottom: 1px solid #fce8f3;
+    vertical-align: middle;
+  }
+  td.num { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  td.month { font-size: 12px; color: var(--sub); font-weight: 600; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fdf2f7; }
+
+  .pm0-val { color: #16a34a; }
+  .p1-val  { color: #2563eb; }
+  .p2-val  { color: #d97706; }
+
+  .trend-bar-wrap { margin-top: 2px; }
+  .trend-bar {
+    height: 3px;
+    border-radius: 2px;
+    display: inline-block;
+    margin-top: 2px;
+  }
+
+  .no-data { text-align: center; color: var(--sub); padding: 24px 0; font-size: 14px; opacity: 0.7; }
+
+  footer {
+    text-align: center;
+    padding: 20px 16px;
+    font-size: 11px;
+    color: var(--sub);
+    opacity: 0.7;
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🎤 ポコチャ メーター予想</h1>
+  <p>過去データの平均から今月のボーダーを予想</p>
+</header>
+
+<div class="container">
+
+  <div class="filter-card">
+    <div class="filter-label">締め時間</div>
+    <div class="time-tabs">
+      <div class="time-tab active" onclick="setTime('24')">24時締め</div>
+      <div class="time-tab" onclick="setTime('22')">22時締め</div>
+      <div class="time-tab" onclick="setTime('13')">13時締め</div>
+    </div>
+    <div class="filter-label">ランク</div>
+    <div class="rank-scroll" id="rankRow"></div>
+  </div>
+
+  <div class="prediction-section">
+    <div class="section-title">📊 今月の予想ボーダー（直近3ヶ月の月末平均）</div>
+    <div class="border-cards">
+      <div class="border-card pm0">
+        <div class="border-label">±0</div>
+        <div class="border-desc">ランク維持</div>
+        <div class="border-value" id="pred-pm0">—</div>
+        <div class="border-range" id="range-pm0"></div>
+      </div>
+      <div class="border-card p1">
+        <div class="border-label">+1</div>
+        <div class="border-desc">1ランクUP</div>
+        <div class="border-value" id="pred-p1">—</div>
+        <div class="border-range" id="range-p1"></div>
+      </div>
+      <div class="border-card p2">
+        <div class="border-label">+2</div>
+        <div class="border-desc">2ランクUP</div>
+        <div class="border-value" id="pred-p2">—</div>
+        <div class="border-range" id="range-p2"></div>
+      </div>
+    </div>
+    <div class="algo-note">
+      <strong>予想方法：</strong>直近3ヶ月の月末平均値を予想値、直近6ヶ月のMin〜Maxを範囲として表示しています。
+    </div>
+  </div>
+
+  <div class="prediction-section">
+    <div class="section-title">🔍 参考データ（実測値）</div>
+    <div class="ref-cards">
+      <div class="ref-card">
+        <div class="ref-label">先月末</div>
+        <div class="ref-date" id="ref-lm-date">—</div>
+        <div class="ref-row"><span class="ref-key">±0</span><span class="ref-val pm0-val" id="ref-lm-pm0">—</span></div>
+        <div class="ref-row"><span class="ref-key">+1</span><span class="ref-val p1-val" id="ref-lm-p1">—</span></div>
+        <div class="ref-row"><span class="ref-key">+2</span><span class="ref-val p2-val" id="ref-lm-p2">—</span></div>
+      </div>
+      <div class="ref-card">
+        <div class="ref-label">1年前の同月末</div>
+        <div class="ref-date" id="ref-ly-date">—</div>
+        <div class="ref-row"><span class="ref-key">±0</span><span class="ref-val pm0-val" id="ref-ly-pm0">—</span></div>
+        <div class="ref-row"><span class="ref-key">+1</span><span class="ref-val p1-val" id="ref-ly-p1">—</span></div>
+        <div class="ref-row"><span class="ref-key">+2</span><span class="ref-val p2-val" id="ref-ly-p2">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="history-card">
+    <div class="section-title">📋 過去データ一覧</div>
+    <div class="history-table-wrap">
+      <table id="histTable">
+        <thead>
+          <tr>
+            <th>月</th>
+            <th class="num" style="color:#16a34a">±0</th>
+            <th class="num" style="color:#2563eb">+1</th>
+            <th class="num" style="color:#d97706">+2</th>
+          </tr>
+        </thead>
+        <tbody id="histBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  データ出典: <a href="https://one-carat.com/campus/archives/category/streamer-tips/pococha-rank-border" target="_blank" style="color:inherit;">LIVER CAMPUS（one-carat.com）</a><br>
+  <span id="updateStamp">月末ボーダーデータに基づく予想</span>
+</footer>
+
+<script>
+const RANKS = ['D1','D2','D3','C1','C2','C3','B1','B2','B3','A1','A2','A3','S1','S2','S3','S4','S5','S6'];
+
+let RAW = {};
+let MONTHS_SORTED = [];
+const DOW_LABEL = ['日','月','火','水','木','金','土'];
+
+let currentTime = '24';
+let currentRank = 'C1';
+
+function fmt(n) {
+  if (n == null) return '—';
+  return n.toLocaleString();
+}
+
+function avg(arr) {
+  const valid = arr.filter(x => x != null);
+  if (!valid.length) return null;
+  return Math.round(valid.reduce((a, b) => a + b, 0) / valid.length);
+}
+
+function getValues(rank, time, monthKey) {
+  const m = RAW[monthKey];
+  if (!m) return null;
+  const t = m[time];
+  if (!t) return null;
+  return t[rank] || null;
+}
+
+function lastDayOfMonth(year, month1to12) {
+  return new Date(year, month1to12, 0).getDate();
+}
+
+function computePrediction(rank, time) {
+  const recentMonths = MONTHS_SORTED.slice(-3);
+  const rangeMonths  = MONTHS_SORTED.slice(-6);
+  const vals3 = recentMonths.map(m => getValues(rank, time, m)).filter(Boolean);
+  const vals6 = rangeMonths.map(m => getValues(rank, time, m)).filter(Boolean);
+  if (!vals3.length) return null;
+  const pred = [0,1,2].map(i => avg(vals3.map(v => v[i])));
+  const minV = [0,1,2].map(i => Math.min(...vals6.map(v => v[i]).filter(x => x != null)));
+  const maxV = [0,1,2].map(i => Math.max(...vals6.map(v => v[i]).filter(x => x != null)));
+  return { pred, min: minV, max: maxV };
+}
+
+function renderPrediction() {
+  const result = computePrediction(currentRank, currentTime);
+  const labels = ['pm0','p1','p2'];
+  if (!result) {
+    labels.forEach(l => {
+      document.getElementById(`pred-${l}`).textContent = '—';
+      document.getElementById(`range-${l}`).textContent = '';
+    });
+    return;
+  }
+  result.pred.forEach((val, i) => {
+    const l = labels[i];
+    document.getElementById(`pred-${l}`).textContent = fmt(val);
+    document.getElementById(`range-${l}`).textContent =
+      `${fmt(result.min[i])}〜${fmt(result.max[i])}`;
+  });
+}
+
+function renderReferences() {
+  const labels = ['pm0','p1','p2'];
+  const now = new Date();
+
+  // 先月末
+  const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const lmKey = `${lm.getFullYear()}-${String(lm.getMonth()+1).padStart(2,'0')}`;
+  const lmVals = getValues(currentRank, currentTime, lmKey);
+  const lmLast = lastDayOfMonth(lm.getFullYear(), lm.getMonth()+1);
+  const lmDate = new Date(lm.getFullYear(), lm.getMonth(), lmLast);
+  document.getElementById('ref-lm-date').textContent =
+    `${lm.getFullYear()}年${lm.getMonth()+1}月${lmLast}日（${DOW_LABEL[lmDate.getDay()]}）`;
+  labels.forEach((l, i) => {
+    document.getElementById(`ref-lm-${l}`).textContent = lmVals ? fmt(lmVals[i]) : '—';
+  });
+
+  // 1年前の同月末
+  const ly = new Date(now.getFullYear() - 1, now.getMonth(), 1);
+  const lyKey = `${ly.getFullYear()}-${String(ly.getMonth()+1).padStart(2,'0')}`;
+  const lyVals = getValues(currentRank, currentTime, lyKey);
+  const lyLast = lastDayOfMonth(ly.getFullYear(), ly.getMonth()+1);
+  const lyDate = new Date(ly.getFullYear(), ly.getMonth(), lyLast);
+  document.getElementById('ref-ly-date').textContent =
+    `${ly.getFullYear()}年${ly.getMonth()+1}月${lyLast}日（${DOW_LABEL[lyDate.getDay()]}）`;
+  labels.forEach((l, i) => {
+    document.getElementById(`ref-ly-${l}`).textContent = lyVals ? fmt(lyVals[i]) : '—';
+  });
+}
+
+function renderHistory() {
+  const tbody = document.getElementById('histBody');
+  tbody.innerHTML = '';
+
+  const months = [...MONTHS_SORTED].reverse();
+  months.forEach(m => {
+    const vals = getValues(currentRank, currentTime, m);
+    if (!vals) return;
+
+    const [y, mo] = m.split('-');
+    const label = `${y}年${parseInt(mo)}月`;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="month">${label}</td>
+      <td class="num pm0-val">${fmt(vals[0])}</td>
+      <td class="num p1-val">${fmt(vals[1])}</td>
+      <td class="num p2-val">${fmt(vals[2])}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function setTime(t) {
+  currentTime = t;
+  document.querySelectorAll('.time-tab').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.time-tab').forEach(el => {
+    if (el.textContent.includes(t)) el.classList.add('active');
+  });
+  render();
+}
+
+function setRank(r) {
+  currentRank = r;
+  document.querySelectorAll('.rank-btn').forEach(el => {
+    el.classList.toggle('active', el.dataset.rank === r);
+  });
+  render();
+}
+
+function render() {
+  renderPrediction();
+  renderReferences();
+  renderHistory();
+}
+
+function init() {
+  const row = document.getElementById('rankRow');
+  RANKS.forEach(r => {
+    const btn = document.createElement('div');
+    btn.className = 'rank-btn' + (r === currentRank ? ' active' : '');
+    btn.textContent = r;
+    btn.dataset.rank = r;
+    btn.onclick = () => setRank(r);
+    row.appendChild(btn);
+  });
+  render();
+}
+
+async function loadData() {
+  try {
+    const res = await fetch('data.json?v=' + Date.now());
+    const j = await res.json();
+    RAW = j.data;
+    MONTHS_SORTED = Object.keys(RAW).sort();
+    const upd = document.getElementById('updateStamp');
+    if (upd && j.updated && j.updated !== 'initial') upd.textContent = '最終更新: ' + j.updated;
+  } catch (e) {
+    console.error('data.json load failed:', e);
+  }
+  init();
+}
+loadData();
+</script>
+</body>
+</html>
