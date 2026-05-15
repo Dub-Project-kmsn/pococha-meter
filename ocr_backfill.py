@@ -118,80 +118,91 @@ def ocr_image(image_bytes):
 def parse_chart_text(text, rank_group):
     """OCR結果テキストから {day: {rank: [±0,+1,+2]}} を構築。
 
-    期待される行パターン:
-      "11 月 ±0 3,000 9,200 21,300 38,300 60,300 86,200"
-      "1 9,800 25,700 ..."       (+1 行)
-      "2 17,600 45,300 ..."      (+2 行)
+    実観測パターン（tesseract 出力例）:
+      "20     2,500      7,600     12,900    39,800    62,600    89,500"   <- day1 ±0 ("20" は "+0"/"±0" の誤認識)
+      "1    金    1     10,800     27,800    56,300    87,000   136,500  206,500"  <- day1 +1
+      "2     21,600    48,500    99,600    127,600   184,900   269,300"   <- day1 +2
 
-    実際にはOCRで日付/曜日が省かれたり結合されたりする。
-    日付セルを安定して取るため、行の連続パターンを使う:
-      ±0/+1/+2 を順番に検出して 6 個の数値を取得 → 1日分。
+    戦略:
+      - 全行から「値が6個並ぶ行」を抽出
+      - そのうち +1 行（行頭= day数値, 次トークン= 曜日, さらに次= "1"）を特定
+      - +1 行の前後の行を ±0 / +2 とみなす
+      - ±0 < +1 < +2 の単調性で検証
     """
-    # 正規化: 全角数字・空白
-    text = text.replace('，', ',').replace('．', '.')
-    text = re.sub(r'[ \t]+', ' ', text)
-    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    # OCR後処理: 全角→半角、ピリオド→カンマ（"8.900" -> "8,900"）、エスケープ系記号除去
+    t = text.replace('，', ',').replace('．', ',')
+    # 数字間ピリオド（OCR誤認識） -> カンマ
+    t = re.sub(r'(\d)\.(\d{3})\b', r'\1,\2', t)
+    # 括弧やコロンなどを空白化
+    t = re.sub(r'[\(\)\[\]\|:;©®]', ' ', t)
+    t = re.sub(r'[ \t]+', ' ', t)
+    lines = [ln.strip() for ln in t.splitlines() if ln.strip()]
 
-    # 行に含まれる「±0」「+1」「+2」マーカーを基準に分類
-    daily = {}  # day -> {rank: [±0,+1,+2]}
-    current_day = None
-    buf = {0: None, 1: None, 2: None}  # ±0, +1, +2 のそれぞれ [v_rank0..v_rank5]
+    # 数値抽出: 3桁以上 もしくは カンマ区切り
+    num_pat = re.compile(r'\d{1,3}(?:,\d{3})+|\d{3,}')
+    # +1 行の検出: 行頭 day(1-31) + 区切り + 曜日らしきトークン + "1" + 値
+    plus1_pat = re.compile(r'^(\d{1,2})\s+\S{1,4}\s+1[\s\d]')
 
-    def flush():
-        nonlocal current_day, buf
-        if current_day is None:
-            return
-        if all(buf[i] is not None and len(buf[i]) == len(rank_group) for i in range(3)):
-            day_data = {}
-            for ri, r in enumerate(rank_group):
-                vals = [buf[0][ri], buf[1][ri], buf[2][ri]]
-                if all(100 <= v <= 50_000_000 for v in vals):
-                    day_data[r] = vals
-            if len(day_data) == len(rank_group):
-                daily[str(current_day)] = day_data
-        current_day = None
-        buf = {0: None, 1: None, 2: None}
-
-    num_pat = re.compile(r'\d[\d,]*')
-
+    # 各行のパース結果: (is_plus1_with_day_or_None, [values...])
+    parsed = []
     for ln in lines:
-        # 日付の検出: 行頭付近に 1〜31 の独立した整数があれば日付
-        # ただし数値が金額として混じるので、行頭の数字のみを見る
-        leading = re.match(r'^(\d{1,2})\b', ln)
-        marker_m = re.search(r'(±\s*0|[\+＋]\s*1|[\+＋]\s*2)', ln)
-
-        if not marker_m:
+        nums = []
+        for s in num_pat.findall(ln):
+            try:
+                v = int(s.replace(',', ''))
+                if 100 <= v <= 50_000_000:
+                    nums.append(v)
+            except ValueError:
+                pass
+        if len(nums) < len(rank_group):
+            parsed.append((None, None))
             continue
-
-        marker = marker_m.group(1)
-        if '±' in marker:
-            mi = 0
-        elif '1' in marker:
-            mi = 1
-        else:
-            mi = 2
-
-        # 行から数値を全部抽出
-        nums = [int(s.replace(',', '')) for s in num_pat.findall(ln) if ',' in s or len(s) >= 3]
-        # 末尾の rank_group 数の数値を採用
-        if len(nums) >= len(rank_group):
-            nums = nums[-len(rank_group):]
-        else:
-            continue
-
-        # 日付の更新（±0 の行で行頭数字があれば新しい日）
-        if mi == 0 and leading:
-            d = int(leading.group(1))
+        # 値は行末側の rank_group 個
+        vals = nums[-len(rank_group):]
+        # +1 行かどうか
+        m = plus1_pat.match(ln)
+        day = None
+        if m:
+            d = int(m.group(1))
             if 1 <= d <= 31:
-                flush()
-                current_day = d
-        elif mi == 0 and current_day is None:
-            # 行頭数字なしの ±0 行 — スキップ
+                day = d
+        parsed.append((day, vals))
+
+    # 値だけ持つ行のリスト（インデックス付き）
+    daily = {}
+    for i, (day, vals) in enumerate(parsed):
+        if day is None or vals is None:
+            continue
+        # +1 行と判定 → 前後の行を ±0 / +2 として採用
+        # 直近で値を持つ前の行
+        prev_vals = None
+        for j in range(i - 1, max(i - 4, -1), -1):
+            if parsed[j][1] is not None:
+                prev_vals = parsed[j][1]
+                break
+        next_vals = None
+        for j in range(i + 1, min(i + 4, len(parsed))):
+            if parsed[j][1] is not None:
+                next_vals = parsed[j][1]
+                break
+        if prev_vals is None or next_vals is None:
             continue
 
-        buf[mi] = nums
-
-    flush()
+        rdata = {}
+        violations = 0
+        for ri, r in enumerate(rank_group):
+            triple = [prev_vals[ri], vals[ri], next_vals[ri]]
+            # 単調性チェック ±0 <= +1 <= +2 を緩めに（±10%許容）
+            if not (triple[0] <= triple[1] * 1.05 and triple[1] <= triple[2] * 1.05):
+                violations += 1
+                continue
+            if all(100 <= v <= 50_000_000 for v in triple):
+                rdata[r] = triple
+        # 6ランク中4以上正常 & 単調性違反が1以下なら採用
+        if len(rdata) >= max(4, len(rank_group) - 1) and violations <= 2:
+            # 既存と競合しない場合のみ追加（同日のデータは最初の検出を優先）
+            if str(day) not in daily:
+                daily[str(day)] = rdata
     return daily
 
 
