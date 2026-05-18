@@ -344,7 +344,7 @@
       </div>
     </div>
     <div class="algo-note" id="algoNote">
-      <strong>月内日次平均：</strong>各月の日次データの平均（月末2日を除外）を直近3ヶ月で平均。月末はオフ日や応援チケット使用で値が低めになる傾向があるため除外しています。
+      <strong>月内日次平均：</strong>各月の日次データの平均（全日対象）を直近3ヶ月で平均。
     </div>
   </div>
 
@@ -422,7 +422,7 @@ const DOW_LABEL = ['日','月','火','水','木','金','土'];
 let currentTime = '24';
 let currentRank = 'C1';
 let currentAlgo = 'daily';  // 'daily' = 月内日次平均, 'monthend' = 月末値
-const MONTH_END_EXCLUDE_DAYS = 2;  // 月末N日は平均から除外
+const MONTH_END_EXCLUDE_DAYS = 0;  // 月末N日は平均から除外（0=除外なし）
 
 function fmt(n) {
   if (n == null) return '—';
@@ -576,7 +576,7 @@ function setAlgo(a) {
   document.getElementById('algo-monthend').classList.toggle('active', a === 'monthend');
   const note = document.getElementById('algoNote');
   if (a === 'daily') {
-    note.innerHTML = '<strong>月内日次平均：</strong>各月の日次データの平均（月末' + MONTH_END_EXCLUDE_DAYS + '日を除外）を直近3ヶ月で平均。月末はオフ日や応援チケット使用で値が低めになる傾向があるため除外しています。';
+    note.innerHTML = '<strong>月内日次平均：</strong>各月の日次データの平均（全日対象）を直近3ヶ月で平均。';
   } else {
     note.innerHTML = '<strong>月末値：</strong>各月の月末ボーダー値を直近3ヶ月で平均。月末はオフ日が多く実際の傾向より低めの可能性があります。';
   }

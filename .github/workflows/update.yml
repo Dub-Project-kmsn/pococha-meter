@@ -2,8 +2,11 @@ name: Update Pococha Border Data
 
 on:
   schedule:
-    # 毎日 JST 02:00 (UTC 17:00) に実行
-    - cron: '0 17 * * *'
+    # JST 11:00 / 18:00 / 20:00 / 翌02:00 に実行（複数回チェック）
+    - cron: '0 2 * * *'   # 11:00 JST
+    - cron: '0 9 * * *'   # 18:00 JST
+    - cron: '0 11 * * *'  # 20:00 JST
+    - cron: '0 17 * * *'  # 翌 02:00 JST (24時締め確定用)
   workflow_dispatch:  # 手動実行を許可
 
 permissions:
