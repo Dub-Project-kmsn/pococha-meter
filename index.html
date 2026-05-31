@@ -224,6 +224,63 @@
     font-size: 10px;
     color: var(--sub);
     opacity: 0.8;
+    margin-bottom: 6px;
+  }
+
+  .items-needed {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 8px;
+    display: inline-block;
+    margin-top: 2px;
+  }
+  .pm0 .items-needed { background: #dcfce7; color: #15803d; }
+  .p1  .items-needed { background: #dbeafe; color: #1d4ed8; }
+  .p2  .items-needed { background: #fef9c3; color: #a16207; }
+  .items-reached {
+    font-size: 12px;
+    font-weight: 700;
+    color: #16a34a;
+  }
+
+  .meter-input-card {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-top: 12px;
+    border: 1.5px dashed var(--primary-light);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .meter-input-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--sub);
+    white-space: nowrap;
+  }
+  .meter-input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+    background: white;
+    font-family: inherit;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .meter-input:focus {
+    outline: none;
+    border-color: var(--primary);
+  }
+  .meter-input-unit {
+    font-size: 13px;
+    color: var(--sub);
+    white-space: nowrap;
   }
 
   .algo-note {
@@ -329,22 +386,30 @@
         <div class="border-desc">ランク維持</div>
         <div class="border-value" id="pred-pm0">—</div>
         <div class="border-range" id="range-pm0"></div>
+        <div id="items-pm0"></div>
       </div>
       <div class="border-card p1">
         <div class="border-label">+1</div>
         <div class="border-desc">1ランクUP</div>
         <div class="border-value" id="pred-p1">—</div>
         <div class="border-range" id="range-p1"></div>
+        <div id="items-p1"></div>
       </div>
       <div class="border-card p2">
         <div class="border-label">+2</div>
         <div class="border-desc">2ランクUP</div>
         <div class="border-value" id="pred-p2">—</div>
         <div class="border-range" id="range-p2"></div>
+        <div id="items-p2"></div>
       </div>
     </div>
     <div class="algo-note" id="algoNote">
       <strong>月内日次平均：</strong>各月の日次データの平均（全日対象）を直近3ヶ月で平均。
+    </div>
+    <div class="meter-input-card">
+      <div class="meter-input-label">🎯 現在のメーター</div>
+      <input type="number" class="meter-input" id="currentMeter" placeholder="0" min="0" oninput="renderItems()">
+      <div class="meter-input-unit">pt</div>
     </div>
   </div>
 
@@ -491,6 +556,29 @@ function computePrediction(rank, time) {
   return { pred, min: minV, max: maxV };
 }
 
+const ITEM_METER = 4000;  // 1000アイテム1個 = 4000メーター
+
+function renderItems() {
+  const labels = ['pm0','p1','p2'];
+  const raw = document.getElementById('currentMeter').value;
+  const current = raw === '' ? null : parseInt(raw);
+  labels.forEach(l => {
+    const el = document.getElementById(`items-${l}`);
+    if (!el) return;
+    const predEl = document.getElementById(`pred-${l}`);
+    const predText = predEl ? predEl.textContent.replace(/,/g, '') : '';
+    const pred = parseInt(predText);
+    if (current === null || isNaN(pred)) { el.innerHTML = ''; return; }
+    const gap = pred - current;
+    if (gap <= 0) {
+      el.innerHTML = '<div class="items-reached">✅ 達成！</div>';
+    } else {
+      const items = Math.ceil(gap / ITEM_METER);
+      el.innerHTML = `<div class="items-needed">あと ${items.toLocaleString()} 個</div>`;
+    }
+  });
+}
+
 function renderPrediction() {
   const result = computePrediction(currentRank, currentTime);
   const labels = ['pm0','p1','p2'];
@@ -499,6 +587,7 @@ function renderPrediction() {
       document.getElementById(`pred-${l}`).textContent = '—';
       document.getElementById(`range-${l}`).textContent = '';
     });
+    renderItems();
     return;
   }
   result.pred.forEach((val, i) => {
@@ -507,6 +596,7 @@ function renderPrediction() {
     document.getElementById(`range-${l}`).textContent =
       `${fmt(result.min[i])}〜${fmt(result.max[i])}`;
   });
+  renderItems();
 }
 
 function renderReferences() {
