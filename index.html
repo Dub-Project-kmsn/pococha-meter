@@ -546,7 +546,7 @@ function monthRepresentative(rank, time, monthKey) {
 
 function computePrediction(rank, time) {
   const recentMonths = MONTHS_SORTED.slice(-3);
-  const rangeMonths  = MONTHS_SORTED.slice(-6);
+  const rangeMonths  = MONTHS_SORTED.slice(-3);
   const vals3 = recentMonths.map(m => monthRepresentative(rank, time, m)).filter(Boolean);
   const vals6 = rangeMonths.map(m => monthRepresentative(rank, time, m)).filter(Boolean);
   if (!vals3.length) return null;
