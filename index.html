@@ -376,10 +376,6 @@
 
   <div class="prediction-section">
     <div class="section-title" id="predTitle">📊 今月の予想ボーダー</div>
-    <div class="time-tabs" style="margin-bottom:12px;">
-      <div class="time-tab active" id="algo-daily" onclick="setAlgo('daily')">月内日次平均</div>
-      <div class="time-tab" id="algo-monthend" onclick="setAlgo('monthend')">月末値</div>
-    </div>
     <div class="border-cards">
       <div class="border-card pm0">
         <div class="border-label">±0</div>
@@ -486,7 +482,6 @@ const DOW_LABEL = ['日','月','火','水','木','金','土'];
 
 let currentTime = '24';
 let currentRank = 'C1';
-let currentAlgo = 'daily';  // 'daily' = 月内日次平均, 'monthend' = 月末値
 const MONTH_END_EXCLUDE_DAYS = 0;  // 月末N日は平均から除外（0=除外なし）
 
 function fmt(n) {
@@ -521,10 +516,8 @@ function lastDayOfMonth(year, month1to12) {
   return new Date(year, month1to12, 0).getDate();
 }
 
-// 月の代表値: 月内日次平均（月末MONTH_END_EXCLUDE_DAYS日を除外）
-// 日次が無い場合は月末値にフォールバック
+// 月の代表値: 月内日次平均（日次なければ月末値にフォールバック）
 function monthRepresentative(rank, time, monthKey) {
-  if (currentAlgo === 'monthend') return getValues(rank, time, monthKey);
   const daily = getDailyMap(time, monthKey);
   if (!daily) return getValues(rank, time, monthKey);
   const [yStr, moStr] = monthKey.split('-');
@@ -660,18 +653,6 @@ function setTime(t) {
   render();
 }
 
-function setAlgo(a) {
-  currentAlgo = a;
-  document.getElementById('algo-daily').classList.toggle('active', a === 'daily');
-  document.getElementById('algo-monthend').classList.toggle('active', a === 'monthend');
-  const note = document.getElementById('algoNote');
-  if (a === 'daily') {
-    note.innerHTML = '<strong>月内日次平均：</strong>各月の日次データの平均（全日対象）を直近3ヶ月で平均。';
-  } else {
-    note.innerHTML = '<strong>月末値：</strong>各月の月末ボーダー値を直近3ヶ月で平均。月末はオフ日が多く実際の傾向より低めの可能性があります。';
-  }
-  render();
-}
 
 function renderDailyTable() {
   const sec = document.getElementById('dailySection');
