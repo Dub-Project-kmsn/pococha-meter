@@ -495,6 +495,13 @@ function avg(arr) {
   return Math.round(valid.reduce((a, b) => a + b, 0) / valid.length);
 }
 
+function median(arr) {
+  const valid = arr.filter(x => x != null).sort((a, b) => a - b);
+  if (!valid.length) return null;
+  const mid = Math.floor(valid.length / 2);
+  return valid.length % 2 ? valid[mid] : Math.round((valid[mid - 1] + valid[mid]) / 2);
+}
+
 function getValues(rank, time, monthKey) {
   const m = RAW[monthKey];
   if (!m) return null;
@@ -516,7 +523,8 @@ function lastDayOfMonth(year, month1to12) {
   return new Date(year, month1to12, 0).getDate();
 }
 
-// 月の代表値: 月内日次平均（日次なければ月末値にフォールバック）
+// 月の代表値: 月内日次の中央値（日次なければ月末値にフォールバック）
+// 中央値を使うことで、OCR誤読による桁落ち・桁増えの外れ値の影響を排除する
 function monthRepresentative(rank, time, monthKey) {
   const daily = getDailyMap(time, monthKey);
   if (!daily) return getValues(rank, time, monthKey);
@@ -534,7 +542,7 @@ function monthRepresentative(rank, time, monthKey) {
     // サンプル不足は月末値を返す
     return getValues(rank, time, monthKey);
   }
-  return [0,1,2].map(i => Math.round(samples.reduce((s, v) => s + v[i], 0) / samples.length));
+  return [0,1,2].map(i => median(samples.map(v => v[i])));
 }
 
 function computePrediction(rank, time) {
@@ -666,6 +674,15 @@ function renderDailyTable() {
     return;
   }
   const days = Object.keys(daily).map(d => parseInt(d)).sort((a, b) => a - b);
+  // 列ごとの月内中央値を基準に、OCR誤読による外れ値を除外表示する
+  const colMed = [0,1,2].map(i => median(
+    days.map(d => daily[String(d)][currentRank]).filter(Boolean).map(v => v[i])
+  ));
+  const sane = (val, i) => {
+    const m = colMed[i];
+    if (m == null || val == null) return val;
+    return (val < m * 0.5 || val > m * 1.7) ? null : val;
+  };
   let hasAny = false;
   for (const d of days) {
     const ranks = daily[String(d)];
@@ -678,9 +695,9 @@ function renderDailyTable() {
     tr.innerHTML = `
       <td class="month">${d}日</td>
       <td class="month">${dow}</td>
-      <td class="num pm0-val">${fmt(v[0])}</td>
-      <td class="num p1-val">${fmt(v[1])}</td>
-      <td class="num p2-val">${fmt(v[2])}</td>
+      <td class="num pm0-val">${fmt(sane(v[0], 0))}</td>
+      <td class="num p1-val">${fmt(sane(v[1], 1))}</td>
+      <td class="num p2-val">${fmt(sane(v[2], 2))}</td>
     `;
     tbody.appendChild(tr);
   }
